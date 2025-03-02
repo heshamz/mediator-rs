@@ -903,27 +903,22 @@ impl Builder {
     }
 
     /// Registers a request handler.
-    pub fn add_handler<Req, Res, H>(self, handler: H) -> Self
+    pub async fn add_handler<Req, Res, H>(self, handler: H) -> Self
     where
         Req: Request<Res> + Send + 'static,
         Res: Send + 'static,
         H: AsyncRequestHandler<Req, Res> + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = RequestHandlerWrapper::new(handler);
-            let mut handlers = mediator.request_handlers.lock().await;
-            handlers.insert(TypeId::of::<Req>(), handler);
-        });
+        let handler = RequestHandlerWrapper::new(handler);
+        let mut handlers = mediator.request_handlers.lock().await;
+        handlers.insert(TypeId::of::<Req>(), handler);
 
         self
     }
 
     /// Registers a request handler from a function.
-    pub fn add_handler_fn<Req, Res, H, F>(self, handler: H) -> Self
+    pub async fn add_handler_fn<Req, Res, H, F>(self, handler: H) -> Self
     where
         Res: Send + 'static,
         Req: Request<Res> + Send + 'static,
@@ -931,18 +926,17 @@ impl Builder {
         H: FnMut(Req) -> F + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = RequestHandlerWrapper::from_fn(handler);
-            let mut handlers = mediator.request_handlers.lock().await;
-            handlers.insert(TypeId::of::<Req>(), handler);
-        });
+        let handler = RequestHandlerWrapper::from_fn(handler);
+        let mut handlers = mediator.request_handlers.lock().await;
+        handlers.insert(TypeId::of::<Req>(), handler);
         self
     }
 
-    pub fn add_handler_fn_with<State, Req, Res, H, Fut>(self, state: State, handler: H) -> Self
+    pub async fn add_handler_fn_with<State, Req, Res, H, Fut>(
+        self,
+        state: State,
+        handler: H,
+    ) -> Self
     where
         State: Send + Clone + 'static,
         Res: Send + 'static,
@@ -951,14 +945,9 @@ impl Builder {
         H: FnMut(Req, State) -> Fut + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = RequestHandlerWrapper::from_fn_with(handler, state);
-            let mut handlers = mediator.request_handlers.lock().await;
-            handlers.insert(TypeId::of::<Req>(), handler);
-        });
+        let handler = RequestHandlerWrapper::from_fn_with(handler, state);
+        let mut handlers = mediator.request_handlers.lock().await;
+        handlers.insert(TypeId::of::<Req>(), handler);
 
         self
     }
@@ -976,7 +965,7 @@ impl Builder {
     }
 
     /// Registers a request handler from a function using a copy of the mediator.
-    pub fn add_handler_fn_deferred<Req, Res, U, H, Fut>(self, f: H) -> Self
+    pub async fn add_handler_fn_deferred<Req, Res, U, H, Fut>(self, f: H) -> Self
     where
         Res: Send + 'static,
         Req: Request<Res> + Send + 'static,
@@ -985,19 +974,14 @@ impl Builder {
     {
         let mediator = self.inner.clone();
 
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = RequestHandlerWrapper::from_deferred(f);
-            let mut handlers = mediator.request_handlers.lock().await;
-            handlers.insert(TypeId::of::<Req>(), handler);
-        });
+        let handler = RequestHandlerWrapper::from_deferred(f);
+        let mut handlers = mediator.request_handlers.lock().await;
+        handlers.insert(TypeId::of::<Req>(), handler);
 
         self
     }
 
-    /// TODO
-    pub fn add_handler_fn_deferred_with<State, Req, Res, U, H, Fut>(
+    pub async fn add_handler_fn_deferred_with<State, Req, Res, U, H, Fut>(
         self,
         state: State,
         f: H,
@@ -1010,60 +994,45 @@ impl Builder {
         H: FnMut(Req, DefaultAsyncMediator, State) -> Fut + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = RequestHandlerWrapper::from_deferred_with(f, state);
-            let mut handlers = mediator.request_handlers.lock().await;
-            handlers.insert(TypeId::of::<Req>(), handler);
-        });
+        let handler = RequestHandlerWrapper::from_deferred_with(f, state);
+        let mut handlers = mediator.request_handlers.lock().await;
+        handlers.insert(TypeId::of::<Req>(), handler);
 
         self
     }
 
     /// Registers an event handler.
-    pub fn subscribe<E, H>(self, handler: H) -> Self
+    pub async fn subscribe<E, H>(self, handler: H) -> Self
     where
         E: Event + Send + 'static,
         H: AsyncEventHandler<E> + Sync + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = EventHandlerWrapper::new(handler);
-            let mut handlers = mediator.event_handlers.lock().await;
-            let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
-            event_handlers.push(handler);
-        });
+        let handler = EventHandlerWrapper::new(handler);
+        let mut handlers = mediator.event_handlers.lock().await;
+        let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
+        event_handlers.push(handler);
 
         self
     }
 
     /// Registers an event handler from a function.
-    pub fn subscribe_fn<E, H, F>(self, handler: H) -> Self
+    pub async fn subscribe_fn<E, H, F>(self, handler: H) -> Self
     where
         E: Event + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
         H: FnMut(E) -> F + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = EventHandlerWrapper::from_fn(handler);
-            let mut handlers = mediator.event_handlers.lock().await;
-            let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
-            event_handlers.push(handler);
-        });
+        let handler = EventHandlerWrapper::from_fn(handler);
+        let mut handlers = mediator.event_handlers.lock().await;
+        let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
+        event_handlers.push(handler);
 
         self
     }
 
-    pub fn subscribe_fn_with<S, E, H, Fut>(self, state: S, handler: H) -> Self
+    pub async fn subscribe_fn_with<S, E, H, Fut>(self, state: S, handler: H) -> Self
     where
         S: Send + Clone + 'static,
         E: Event + Send + 'static,
@@ -1071,15 +1040,10 @@ impl Builder {
         H: FnMut(E, S) -> Fut + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = EventHandlerWrapper::from_fn_with(handler, state);
-            let mut handlers = mediator.event_handlers.lock().await;
-            let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
-            event_handlers.push(handler);
-        });
+        let handler = EventHandlerWrapper::from_fn_with(handler, state);
+        let mut handlers = mediator.event_handlers.lock().await;
+        let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
+        event_handlers.push(handler);
 
         self
     }
@@ -1096,27 +1060,22 @@ impl Builder {
     }
 
     /// Registers an event handler from a function using a copy of the mediator.
-    pub fn subscribe_fn_deferred<E, H, U, Fut>(self, f: H) -> Self
+    pub async fn subscribe_fn_deferred<E, H, U, Fut>(self, f: H) -> Self
     where
         E: Event + Send + 'static,
         Fut: Future<Output = ()> + Send + 'static,
         H: FnMut(E, DefaultAsyncMediator) -> Fut + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = EventHandlerWrapper::from_deferred(f);
-            let mut handlers = mediator.event_handlers.lock().await;
-            let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
-            event_handlers.push(handler);
-        });
+        let handler = EventHandlerWrapper::from_deferred(f);
+        let mut handlers = mediator.event_handlers.lock().await;
+        let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
+        event_handlers.push(handler);
 
         self
     }
 
-    pub fn subscribe_fn_deferred_with<State, E, H, U, Fut>(self, state: State, f: H) -> Self
+    pub async fn subscribe_fn_deferred_with<State, E, H, U, Fut>(self, state: State, f: H) -> Self
     where
         State: Sync + Send + Clone + 'static,
         E: Event + Send + 'static,
@@ -1124,22 +1083,17 @@ impl Builder {
         H: FnMut(E, DefaultAsyncMediator, State) -> Fut + Send + 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let handler = EventHandlerWrapper::from_deferred_with(f, state);
-            let mut handlers = mediator.event_handlers.lock().await;
-            let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
-            event_handlers.push(handler);
-        });
+        let handler = EventHandlerWrapper::from_deferred_with(f, state);
+        let mut handlers = mediator.event_handlers.lock().await;
+        let event_handlers = handlers.entry(TypeId::of::<E>()).or_insert_with(Vec::new);
+        event_handlers.push(handler);
 
         self
     }
 
     /// Registers a stream handler.
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler<Req, S, T, H>(self, handler: H) -> Self
+    pub async fn add_stream_handler<Req, S, T, H>(self, handler: H) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + 'static,
         H: StreamRequestHandler<Request = Req, Stream = S, Item = T> + Send + 'static,
@@ -1147,24 +1101,19 @@ impl Builder {
         T: 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.stream_handlers.lock().await;
-            handlers_lock.insert(
-                TypeId::of::<Req>(),
-                StreamRequestHandlerWrapper::new(handler),
-            );
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.stream_handlers.lock().await;
+        handlers_lock.insert(
+            TypeId::of::<Req>(),
+            StreamRequestHandlerWrapper::new(handler),
+        );
+        drop(handlers_lock);
 
         self
     }
 
     /// Registers a stream handler from a function.
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler_fn<Req, S, T, F>(self, f: F) -> Self
+    pub async fn add_stream_handler_fn<Req, S, T, F>(self, f: F) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + 'static,
         F: FnMut(Req) -> S + Send + 'static,
@@ -1172,20 +1121,15 @@ impl Builder {
         T: 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.stream_handlers.lock().await;
-            handlers_lock.insert(TypeId::of::<Req>(), StreamRequestHandlerWrapper::from_fn(f));
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.stream_handlers.lock().await;
+        handlers_lock.insert(TypeId::of::<Req>(), StreamRequestHandlerWrapper::from_fn(f));
+        drop(handlers_lock);
 
         self
     }
 
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler_fn_with<State, Req, S, T, F>(self, state: State, f: F) -> Self
+    pub async fn add_stream_handler_fn_with<State, Req, S, T, F>(self, state: State, f: F) -> Self
     where
         State: Send + Clone + 'static,
         Req: StreamRequest<Stream = S, Item = T> + 'static,
@@ -1194,17 +1138,12 @@ impl Builder {
         T: 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.stream_handlers.lock().await;
-            handlers_lock.insert(
-                TypeId::of::<Req>(),
-                StreamRequestHandlerWrapper::from_fn_with(f, state),
-            );
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.stream_handlers.lock().await;
+        handlers_lock.insert(
+            TypeId::of::<Req>(),
+            StreamRequestHandlerWrapper::from_fn_with(f, state),
+        );
+        drop(handlers_lock);
 
         self
     }
@@ -1225,7 +1164,7 @@ impl Builder {
 
     /// Registers a stream handler from a function using a copy of the mediator.
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler_fn_deferred<Req, S, T, F>(self, f: F) -> Self
+    pub async fn add_stream_handler_fn_deferred<Req, S, T, F>(self, f: F) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + 'static,
         F: FnMut(Req, DefaultAsyncMediator) -> S + Send + 'static,
@@ -1233,23 +1172,18 @@ impl Builder {
         T: 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.stream_handlers.lock().await;
-            handlers_lock.insert(
-                TypeId::of::<Req>(),
-                StreamRequestHandlerWrapper::from_deferred(f),
-            );
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.stream_handlers.lock().await;
+        handlers_lock.insert(
+            TypeId::of::<Req>(),
+            StreamRequestHandlerWrapper::from_deferred(f),
+        );
+        drop(handlers_lock);
 
         self
     }
 
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler_fn_deferred_with<State, Req, S, T, F>(
+    pub async fn add_stream_handler_fn_deferred_with<State, Req, S, T, F>(
         self,
         state: State,
         f: F,
@@ -1262,24 +1196,19 @@ impl Builder {
         T: 'static,
     {
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.stream_handlers.lock().await;
-            handlers_lock.insert(
-                TypeId::of::<Req>(),
-                StreamRequestHandlerWrapper::from_deferred_with(f, state),
-            );
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.stream_handlers.lock().await;
+        handlers_lock.insert(
+            TypeId::of::<Req>(),
+            StreamRequestHandlerWrapper::from_deferred_with(f, state),
+        );
+        drop(handlers_lock);
 
         self
     }
 
     /// Adds a request interceptor.
     #[cfg(feature = "interceptors")]
-    pub fn add_interceptor<Req, Res, F, H>(self, handler: H) -> Self
+    pub async fn add_interceptor<Req, Res, F, H>(self, handler: H) -> Self
     where
         Res: Send + 'static,
         Req: Request<Res> + Send + 'static,
@@ -1291,21 +1220,17 @@ impl Builder {
 
         let mediator = self.inner.clone();
 
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.interceptors.lock().await;
-            let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
-            interceptors.push(InterceptorWrapper::from_handler(handler));
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.interceptors.lock().await;
+        let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
+        interceptors.push(InterceptorWrapper::from_handler(handler));
+        drop(handlers_lock);
 
         self
     }
 
     /// Adds a request interceptor from a function.
     #[cfg(feature = "interceptors")]
-    pub fn add_interceptor_fn<Req, Res, H>(self, handler: H) -> Self
+    pub async fn add_interceptor_fn<Req, Res, H>(self, handler: H) -> Self
     where
         Res: Send + 'static,
         Req: Request<Res> + Send + 'static,
@@ -1316,22 +1241,17 @@ impl Builder {
         let key = InterceptorKey { req_ty, res_ty };
 
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.interceptors.lock().await;
-            let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
-            interceptors.push(InterceptorWrapper::from_handler_fn(handler));
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.interceptors.lock().await;
+        let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
+        interceptors.push(InterceptorWrapper::from_handler_fn(handler));
+        drop(handlers_lock);
 
         self
     }
 
     /// Adds a stream request interceptor.
     #[cfg(all(feature = "streams", feature = "interceptors"))]
-    pub fn add_interceptor_stream<Req, T, S, H>(self, handler: H) -> Self
+    pub async fn add_interceptor_stream<Req, T, S, H>(self, handler: H) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + Send + 'static,
         S: Stream<Item = T> + Send + 'static,
@@ -1340,22 +1260,17 @@ impl Builder {
     {
         let key = InterceptorKey::of::<Req, S>();
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.interceptors.lock().await;
-            let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
-            interceptors.push(InterceptorWrapper::from_stream(handler));
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.interceptors.lock().await;
+        let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
+        interceptors.push(InterceptorWrapper::from_stream(handler));
+        drop(handlers_lock);
 
         self
     }
 
     /// Adds a stream request interceptor from a function.
     #[cfg(all(feature = "streams", feature = "interceptors"))]
-    pub fn add_interceptor_stream_fn<Req, T, S, H>(self, handler: H) -> Self
+    pub async fn add_interceptor_stream_fn<Req, T, S, H>(self, handler: H) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + Send + 'static,
         S: Stream<Item = T> + Send + 'static,
@@ -1364,15 +1279,10 @@ impl Builder {
     {
         let key = InterceptorKey::of::<Req, S>();
         let mediator = self.inner.clone();
-
-        // FIXME: Find a way to prevent using async in the builder
-        // We block the thread to keep the api signature consistent and don't require await
-        run_blocking(async move {
-            let mut handlers_lock = mediator.interceptors.lock().await;
-            let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
-            interceptors.push(InterceptorWrapper::from_stream_fn(handler));
-            drop(handlers_lock);
-        });
+        let mut handlers_lock = mediator.interceptors.lock().await;
+        let interceptors = handlers_lock.entry(key).or_insert(Vec::new());
+        interceptors.push(InterceptorWrapper::from_stream_fn(handler));
+        drop(handlers_lock);
 
         self
     }
