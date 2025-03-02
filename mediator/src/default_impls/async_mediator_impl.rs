@@ -953,7 +953,7 @@ impl Builder {
     }
 
     /// Register a request handler using a copy of the mediator.
-    pub fn add_handler_deferred<Req, Res, H, F>(self, f: F) -> Self
+    pub async fn add_handler_deferred<Req, Res, H, F>(self, f: F) -> Self
     where
         Req: Request<Res> + Send + 'static,
         Res: Send + 'static,
@@ -961,7 +961,7 @@ impl Builder {
         F: Fn(DefaultAsyncMediator) -> H,
     {
         let handler = f(self.inner.clone());
-        self.add_handler(handler)
+        self.add_handler(handler).await
     }
 
     /// Registers a request handler from a function using a copy of the mediator.
@@ -1049,14 +1049,14 @@ impl Builder {
     }
 
     /// Registers an event handler using a copy of the mediator.
-    pub fn subscribe_deferred<E, H, F>(self, f: F) -> Self
+    pub async fn subscribe_deferred<E, H, F>(self, f: F) -> Self
     where
         E: Event + Send + 'static,
         H: AsyncEventHandler<E> + Sync + Send + 'static,
         F: Fn(DefaultAsyncMediator) -> H,
     {
         let handler = f(self.inner.clone());
-        self.subscribe(handler)
+        self.subscribe(handler).await
     }
 
     /// Registers an event handler from a function using a copy of the mediator.
@@ -1150,7 +1150,7 @@ impl Builder {
 
     /// Registers a stream handler using a copy of the mediator.
     #[cfg(feature = "streams")]
-    pub fn add_stream_handler_deferred<Req, S, T, H, F>(self, f: F) -> Self
+    pub async fn add_stream_handler_deferred<Req, S, T, H, F>(self, f: F) -> Self
     where
         Req: StreamRequest<Stream = S, Item = T> + 'static,
         H: StreamRequestHandler<Request = Req, Stream = S, Item = T> + Send + 'static,
@@ -1159,7 +1159,7 @@ impl Builder {
         F: Fn(DefaultAsyncMediator) -> H + Send,
     {
         let handler = f(self.inner.clone());
-        self.add_stream_handler(handler)
+        self.add_stream_handler(handler).await
     }
 
     /// Registers a stream handler from a function using a copy of the mediator.
